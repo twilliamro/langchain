@@ -2,108 +2,166 @@
   "cells": [
     {
       "cell_type": "raw",
-      "id": "63ee3f93",
       "metadata": {
-        "id": "63ee3f93"
+        "vscode": {
+          "languageId": "raw"
+        },
+        "id": "8JrU76pKH1kO"
       },
       "source": [
         "---\n",
-        "sidebar_position: 0\n",
+        "\n",
+        "> Add blockquote\n",
+        "\n",
+        "\n",
+        "sidebar_position: 1\n",
+        "keywords: [conversationchain]\n",
         "---"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "9316da0d",
       "metadata": {
-        "id": "9316da0d"
+        "id": "lpYV7OK-H1kP"
       },
       "source": [
-        "# Build a simple LLM application with chat models and prompt templates\n",
+        "# Build a Chatbot"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "-Kbs7NDSH1kP"
+      },
+      "source": [
+        ":::note\n",
         "\n",
-        "In this quickstart we'll show you how to build a simple LLM application with LangChain. This application will translate text from English into another language. This is a relatively simple LLM application - it's just a single LLM call plus some prompting. Still, this is a great way to get started with LangChain - a lot of features can be built with just some prompting and an LLM call!\n",
+        "This tutorial previously used the [RunnableWithMessageHistory](https://python.langchain.com/api_reference/core/runnables/langchain_core.runnables.history.RunnableWithMessageHistory.html) abstraction. You can access that version of the documentation in the [v0.2 docs](https://python.langchain.com/v0.2/docs/tutorials/chatbot/).\n",
         "\n",
-        "After reading this tutorial, you'll have a high level overview of:\n",
+        "As of the v0.3 release of LangChain, we recommend that LangChain users take advantage of [LangGraph persistence](https://langchain-ai.github.io/langgraph/concepts/persistence/) to incorporate `memory` into new LangChain applications.\n",
         "\n",
-        "- Using [language models](/docs/concepts/chat_models)\n",
+        "If your code is already relying on `RunnableWithMessageHistory` or `BaseChatMessageHistory`, you do **not** need to make any changes. We do not plan on deprecating this functionality in the near future as it works for simple chat applications and any code that uses `RunnableWithMessageHistory` will continue to work as expected.\n",
         "\n",
-        "- Using [prompt templates](/docs/concepts/prompt_templates)\n",
+        "Please see [How to migrate to LangGraph Memory](/docs/versions/migrating_memory/) for more details.\n",
+        ":::\n",
         "\n",
-        "- Debugging and tracing your application using [LangSmith](https://docs.smith.langchain.com/)\n",
+        "## Overview\n",
         "\n",
-        "Let's dive in!\n",
+        "We'll go over an example of how to design and implement an LLM-powered chatbot.\n",
+        "This chatbot will be able to have a conversation and remember previous interactions with a [chat model](/docs/concepts/chat_models).\n",
+        "\n",
+        "\n",
+        "Note that this chatbot that we build will only use the language model to have a conversation.\n",
+        "There are several other related concepts that you may be looking for:\n",
+        "\n",
+        "- [Conversational RAG](/docs/tutorials/qa_chat_history): Enable a chatbot experience over an external source of data\n",
+        "- [Agents](/docs/tutorials/agents): Build a chatbot that can take actions\n",
+        "\n",
+        "This tutorial will cover the basics which will be helpful for those two more advanced topics, but feel free to skip directly to there should you choose.\n",
         "\n",
         "## Setup\n",
         "\n",
         "### Jupyter Notebook\n",
         "\n",
-        "This and other tutorials are perhaps most conveniently run in a [Jupyter notebooks](https://jupyter.org/). Going through guides in an interactive environment is a great way to better understand them. See [here](https://jupyter.org/install) for instructions on how to install.\n",
+        "This guide (and most of the other guides in the documentation) uses [Jupyter notebooks](https://jupyter.org/) and assumes the reader is as well. Jupyter notebooks are perfect for learning how to work with LLM systems because oftentimes things can go wrong (unexpected output, API down, etc) and going through guides in an interactive environment is a great way to better understand them.\n",
+        "\n",
+        "This and other tutorials are perhaps most conveniently run in a Jupyter notebook. See [here](https://jupyter.org/install) for instructions on how to install.\n",
         "\n",
         "### Installation\n",
         "\n",
-        "To install LangChain run:\n",
+        "For this tutorial we will need `langchain-core` and `langgraph`. This guide requires `langgraph >= 0.2.28`.\n",
         "\n",
-        "<!-- HIDE_IN_NB\n",
         "import Tabs from '@theme/Tabs';\n",
         "import TabItem from '@theme/TabItem';\n",
         "import CodeBlock from \"@theme/CodeBlock\";\n",
         "\n",
         "<Tabs>\n",
         "  <TabItem value=\"pip\" label=\"Pip\" default>\n",
-        "    <CodeBlock language=\"bash\">pip install langchain</CodeBlock>\n",
+        "    <CodeBlock language=\"bash\">pip install langchain-core langgraph>0.2.27</CodeBlock>\n",
         "  </TabItem>\n",
         "  <TabItem value=\"conda\" label=\"Conda\">\n",
-        "    <CodeBlock language=\"bash\">conda install langchain -c conda-forge</CodeBlock>\n",
+        "    <CodeBlock language=\"bash\">conda install langchain-core langgraph>0.2.27 -c conda-forge</CodeBlock>\n",
         "  </TabItem>\n",
         "</Tabs>\n",
-        "HIDE_IN_NB -->"
+        "\n",
+        "\n",
+        "\n",
+        "For more details, see our [Installation guide](/docs/how_to/installation).\n",
+        "\n",
+        "### LangSmith\n",
+        "\n",
+        "Many of the applications you build with LangChain will contain multiple steps with multiple invocations of LLM calls.\n",
+        "As these applications get more and more complex, it becomes crucial to be able to inspect what exactly is going on inside your chain or agent.\n",
+        "The best way to do this is with [LangSmith](https://smith.langchain.com).\n",
+        "\n",
+        "After you sign up at the link above, make sure to set your environment variables to start logging traces:\n",
+        "\n",
+        "```shell\n",
+        "export LANGSMITH_TRACING=\"true\"\n",
+        "export LANGSMITH_API_KEY=\"...\"\n",
+        "```\n",
+        "\n",
+        "Or, if in a notebook, you can set them with:\n",
+        "\n",
+        "```python\n",
+        "import getpass\n",
+        "import os\n",
+        "\n",
+        "os.environ[\"LANGSMITH_TRACING\"] = \"true\"\n",
+        "os.environ[\"LANGSMITH_API_KEY\"] = getpass.getpass()\n",
+        "```\n",
+        "\n",
+        "## Quickstart\n",
+        "\n",
+        "First up, let's learn how to use a language model by itself. LangChain supports many different language models that you can use interchangeably - select the one you want to use below!\n",
+        "\n",
+        "import ChatModelTabs from \"@theme/ChatModelTabs\";\n",
+        "\n",
+        "<ChatModelTabs overrideParams={{openai: {model: \"gpt-4o-mini\"}}} />\n"
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 28,
-      "id": "86874822",
+      "source": [
+        "#initialization\n",
+        "%pip install openai\n",
+        "%pip install -qU \"langchain[openai]\"\n",
+        "%pip install -U langsmith\n",
+        "\n",
+        "import getpass\n",
+        "import os\n",
+        "\n",
+        "if not os.environ.get(\"OPENAI_API_KEY\"):\n",
+        "  os.environ[\"OPENAI_API_KEY\"] = getpass.getpass(\"Enter API key for OpenAI: \")\n",
+        "\n",
+        "from langchain.chat_models import init_chat_model\n",
+        "\n",
+        "model = init_chat_model(\"gpt-4o-mini\", model_provider=\"openai\")\n",
+        "\n",
+        "LANGSMITH_TRACING=\"true\"\n",
+        "LANGSMITH_ENDPOINT=\"https://api.smith.langchain.com\"\n",
+        "LANGSMITH_API_KEY=\"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\"\n",
+        "LANGSMITH_PROJECT=\"BuildPrompt\"\n",
+        "OPENAI_API_KEY=\"<your-openai-api-key>\"\n",
+        "\n",
+        "from langchain_openai import ChatOpenAI\n",
+        "\n",
+        "llm = ChatOpenAI()\n",
+        "llm.invoke(\"Hello, world!\")"
+      ],
       "metadata": {
         "colab": {
           "base_uri": "https://localhost:8080/"
         },
-        "id": "86874822",
-        "outputId": "21c0ecb5-8c00-4e53-967c-96f4ce72969d"
+        "id": "EBQBfPEMJT8q",
+        "outputId": "4ee1b316-89e1-4a5f-b383-ff5b12bd6625"
       },
+      "execution_count": 7,
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
           "text": [
-            "Requirement already satisfied: langchain in /usr/local/lib/python3.11/dist-packages (0.3.26)\n",
-            "Requirement already satisfied: langchain-core<1.0.0,>=0.3.66 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.3.66)\n",
-            "Requirement already satisfied: langchain-text-splitters<1.0.0,>=0.3.8 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.3.8)\n",
-            "Requirement already satisfied: langsmith>=0.1.17 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.4.1)\n",
-            "Requirement already satisfied: pydantic<3.0.0,>=2.7.4 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.11.7)\n",
-            "Requirement already satisfied: SQLAlchemy<3,>=1.4 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.0.41)\n",
-            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.32.3)\n",
-            "Requirement already satisfied: PyYAML>=5.3 in /usr/local/lib/python3.11/dist-packages (from langchain) (6.0.2)\n",
-            "Requirement already satisfied: tenacity!=8.4.0,<10.0.0,>=8.1.0 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.66->langchain) (8.5.0)\n",
-            "Requirement already satisfied: jsonpatch<2.0,>=1.33 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.66->langchain) (1.33)\n",
-            "Requirement already satisfied: packaging<25,>=23.2 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.66->langchain) (24.2)\n",
-            "Requirement already satisfied: typing-extensions>=4.7 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.66->langchain) (4.14.0)\n",
-            "Requirement already satisfied: httpx<1,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.1.17->langchain) (0.28.1)\n",
-            "Requirement already satisfied: orjson<4.0.0,>=3.9.14 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.1.17->langchain) (3.10.18)\n",
-            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.1.17->langchain) (1.0.0)\n",
-            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.1.17->langchain) (0.23.0)\n",
-            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (0.7.0)\n",
-            "Requirement already satisfied: pydantic-core==2.33.2 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (2.33.2)\n",
-            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (0.4.1)\n",
-            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (3.4.2)\n",
-            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (3.10)\n",
-            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (2.4.0)\n",
-            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (2025.6.15)\n",
-            "Requirement already satisfied: greenlet>=1 in /usr/local/lib/python3.11/dist-packages (from SQLAlchemy<3,>=1.4->langchain) (3.2.3)\n",
-            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith>=0.1.17->langchain) (4.9.0)\n",
-            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith>=0.1.17->langchain) (1.0.9)\n",
-            "Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->langsmith>=0.1.17->langchain) (0.16.0)\n",
-            "Requirement already satisfied: jsonpointer>=1.9 in /usr/local/lib/python3.11/dist-packages (from jsonpatch<2.0,>=1.33->langchain-core<1.0.0,>=0.3.66->langchain) (3.0.0)\n",
-            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx<1,>=0.23.0->langsmith>=0.1.17->langchain) (1.3.1)\n",
             "Requirement already satisfied: openai in /usr/local/lib/python3.11/dist-packages (1.91.0)\n",
             "Requirement already satisfied: anyio<5,>=3.5.0 in /usr/local/lib/python3.11/dist-packages (from openai) (4.9.0)\n",
             "Requirement already satisfied: distro<2,>=1.7.0 in /usr/local/lib/python3.11/dist-packages (from openai) (1.9.0)\n",
@@ -119,157 +177,97 @@
             "Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->openai) (0.16.0)\n",
             "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1.9.0->openai) (0.7.0)\n",
             "Requirement already satisfied: pydantic-core==2.33.2 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1.9.0->openai) (2.33.2)\n",
-            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1.9.0->openai) (0.4.1)\n"
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1.9.0->openai) (0.4.1)\n",
+            "Requirement already satisfied: langsmith in /usr/local/lib/python3.11/dist-packages (0.4.2)\n",
+            "Requirement already satisfied: httpx<1,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith) (0.28.1)\n",
+            "Requirement already satisfied: orjson<4.0.0,>=3.9.14 in /usr/local/lib/python3.11/dist-packages (from langsmith) (3.10.18)\n",
+            "Requirement already satisfied: packaging>=23.2 in /usr/local/lib/python3.11/dist-packages (from langsmith) (24.2)\n",
+            "Requirement already satisfied: pydantic<3,>=1 in /usr/local/lib/python3.11/dist-packages (from langsmith) (2.11.7)\n",
+            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langsmith) (2.32.3)\n",
+            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith) (1.0.0)\n",
+            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith) (0.23.0)\n",
+            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith) (4.9.0)\n",
+            "Requirement already satisfied: certifi in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith) (2025.6.15)\n",
+            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith) (1.0.9)\n",
+            "Requirement already satisfied: idna in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith) (3.10)\n",
+            "Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->langsmith) (0.16.0)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1->langsmith) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.2 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1->langsmith) (2.33.2)\n",
+            "Requirement already satisfied: typing-extensions>=4.12.2 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1->langsmith) (4.14.0)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3,>=1->langsmith) (0.4.1)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith) (3.4.2)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith) (2.4.0)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx<1,>=0.23.0->langsmith) (1.3.1)\n",
+            "Collecting langgraph\n",
+            "  Downloading langgraph-0.4.10-py3-none-any.whl.metadata (6.8 kB)\n",
+            "Requirement already satisfied: langchain-core>=0.1 in /usr/local/lib/python3.11/dist-packages (from langgraph) (0.3.66)\n",
+            "Collecting langgraph-checkpoint>=2.0.26 (from langgraph)\n",
+            "  Downloading langgraph_checkpoint-2.1.0-py3-none-any.whl.metadata (4.2 kB)\n",
+            "Collecting langgraph-prebuilt>=0.2.0 (from langgraph)\n",
+            "  Downloading langgraph_prebuilt-0.2.3-py3-none-any.whl.metadata (4.5 kB)\n",
+            "Collecting langgraph-sdk>=0.1.42 (from langgraph)\n",
+            "  Downloading langgraph_sdk-0.1.70-py3-none-any.whl.metadata (1.5 kB)\n",
+            "Requirement already satisfied: pydantic>=2.7.4 in /usr/local/lib/python3.11/dist-packages (from langgraph) (2.11.7)\n",
+            "Requirement already satisfied: xxhash>=3.5.0 in /usr/local/lib/python3.11/dist-packages (from langgraph) (3.5.0)\n",
+            "Requirement already satisfied: langsmith>=0.3.45 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (0.4.2)\n",
+            "Requirement already satisfied: tenacity!=8.4.0,<10.0.0,>=8.1.0 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (8.5.0)\n",
+            "Requirement already satisfied: jsonpatch<2.0,>=1.33 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (1.33)\n",
+            "Requirement already satisfied: PyYAML>=5.3 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (6.0.2)\n",
+            "Requirement already satisfied: packaging<25,>=23.2 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (24.2)\n",
+            "Requirement already satisfied: typing-extensions>=4.7 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (4.14.0)\n",
+            "Collecting ormsgpack>=1.10.0 (from langgraph-checkpoint>=2.0.26->langgraph)\n",
+            "  Downloading ormsgpack-1.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (43 kB)\n",
+            "\u001b[2K     \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m43.7/43.7 kB\u001b[0m \u001b[31m1.7 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hRequirement already satisfied: httpx>=0.25.2 in /usr/local/lib/python3.11/dist-packages (from langgraph-sdk>=0.1.42->langgraph) (0.28.1)\n",
+            "Requirement already satisfied: orjson>=3.10.1 in /usr/local/lib/python3.11/dist-packages (from langgraph-sdk>=0.1.42->langgraph) (3.10.18)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.2 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (2.33.2)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (0.4.1)\n",
+            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (4.9.0)\n",
+            "Requirement already satisfied: certifi in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (2025.6.15)\n",
+            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (1.0.9)\n",
+            "Requirement already satisfied: idna in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (3.10)\n",
+            "Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (0.16.0)\n",
+            "Requirement already satisfied: jsonpointer>=1.9 in /usr/local/lib/python3.11/dist-packages (from jsonpatch<2.0,>=1.33->langchain-core>=0.1->langgraph) (3.0.0)\n",
+            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (2.32.3)\n",
+            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (1.0.0)\n",
+            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (0.23.0)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith>=0.3.45->langchain-core>=0.1->langgraph) (3.4.2)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith>=0.3.45->langchain-core>=0.1->langgraph) (2.4.0)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (1.3.1)\n",
+            "Downloading langgraph-0.4.10-py3-none-any.whl (152 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m152.4/152.4 kB\u001b[0m \u001b[31m4.5 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading langgraph_checkpoint-2.1.0-py3-none-any.whl (43 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m43.8/43.8 kB\u001b[0m \u001b[31m3.5 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading langgraph_prebuilt-0.2.3-py3-none-any.whl (23 kB)\n",
+            "Downloading langgraph_sdk-0.1.70-py3-none-any.whl (49 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m50.0/50.0 kB\u001b[0m \u001b[31m3.7 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading ormsgpack-1.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (216 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m216.5/216.5 kB\u001b[0m \u001b[31m15.2 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hInstalling collected packages: ormsgpack, langgraph-sdk, langgraph-checkpoint, langgraph-prebuilt, langgraph\n",
+            "Successfully installed langgraph-0.4.10 langgraph-checkpoint-2.1.0 langgraph-prebuilt-0.2.3 langgraph-sdk-0.1.70 ormsgpack-1.10.0\n"
           ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "AIMessage(content='Hello! How can I assist you today?', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 9, 'prompt_tokens': 11, 'total_tokens': 20, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-3.5-turbo-0125', 'system_fingerprint': None, 'id': 'chatcmpl-Bmg2CjI8lyIv76gvnps0yhmEiJ34I', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='run--d7f28f1d-edc7-46cd-81c1-a893f8f087dd-0', usage_metadata={'input_tokens': 11, 'output_tokens': 9, 'total_tokens': 20, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 7
         }
-      ],
-      "source": [
-        "# | output: false\n",
-        "\n",
-        "%pip install langchain\n",
-        "%pip install openai\n",
-        "%pip install -qU langchain[openai]\n",
-        "\n",
-        "\n",
-        "\n",
-        "# OR\n",
-        "# %conda install langchain -c conda-forge"
       ]
     },
     {
       "cell_type": "code",
-      "source": [
-        "import getpass\n",
-        "import os\n",
-        "\n",
-        "if not os.environ.get(\"OPENAI_API_KEY\"):\n",
-        "  os.environ[\"OPENAI_API_KEY\"] = getpass.getpass(\"Enter API key for OpenAI: \")\n",
-        "\n",
-        "from langchain.chat_models import init_chat_model\n",
-        "\n",
-        "model = init_chat_model(\"gpt-4o-mini\", model_provider=\"openai\")"
-      ],
+      "execution_count": 8,
       "metadata": {
-        "id": "PW8vM-dO6rDC"
-      },
-      "id": "PW8vM-dO6rDC",
-      "execution_count": 29,
-      "outputs": []
-    },
-    {
-      "cell_type": "markdown",
-      "id": "a546a5bc",
-      "metadata": {
-        "id": "a546a5bc"
-      },
-      "source": [
-        "For more details, see our [Installation guide](/docs/how_to/installation).\n",
-        "\n",
-        "### LangSmith\n",
-        "\n",
-        "Many of the applications you build with LangChain will contain multiple steps with multiple invocations of LLM calls.\n",
-        "As these applications get more and more complex, it becomes crucial to be able to inspect what exactly is going on inside your chain or agent.\n",
-        "The best way to do this is with [LangSmith](https://smith.langchain.com).\n",
-        "\n",
-        "After you sign up at the link above, make sure to set your environment variables to start logging traces:\n",
-        "\n",
-        "```shell\n",
-        "export LANGSMITH_TRACING=\"true\"\n",
-        "export LANGSMITH_API_KEY=\"...\"\n",
-        "export LANGSMITH_PROJECT=\"default\" # or any other project name\n",
-        "```\n",
-        "\n",
-        "Or, if in a notebook, you can set them with:\n",
-        "\n",
-        "```python\n",
-        "import getpass\n",
-        "import os\n",
-        "\n",
-        "try:\n",
-        "    # load environment variables from .env file (requires `python-dotenv`)\n",
-        "    from dotenv import load_dotenv\n",
-        "\n",
-        "    load_dotenv()\n",
-        "except ImportError:\n",
-        "    pass\n",
-        "\n",
-        "os.environ[\"LANGSMITH_TRACING\"] = \"true\"\n",
-        "if \"LANGSMITH_API_KEY\" not in os.environ:\n",
-        "    os.environ[\"LANGSMITH_API_KEY\"] = getpass.getpass(\n",
-        "        prompt=\"Enter your LangSmith API key (optional): \"\n",
-        "    )\n",
-        "if \"LANGSMITH_PROJECT\" not in os.environ:\n",
-        "    os.environ[\"LANGSMITH_PROJECT\"] = getpass.getpass(\n",
-        "        prompt='Enter your LangSmith Project Name (default = \"default\"): '\n",
-        "    )\n",
-        "    if not os.environ.get(\"LANGSMITH_PROJECT\"):\n",
-        "        os.environ[\"LANGSMITH_PROJECT\"] = \"default\"\n",
-        "```"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "source": [
-        "# Langsmith\n",
-        "import getpass\n",
-        "import os\n",
-        "\n",
-        "try:\n",
-        "    # load environment variables from .env file (requires `python-dotenv`)\n",
-        "    from dotenv import load_dotenv\n",
-        "\n",
-        "    load_dotenv()\n",
-        "except ImportError:\n",
-        "    pass\n",
-        "\n",
-        "os.environ[\"LANGSMITH_TRACING\"] = \"true\"\n",
-        "if \"LANGSMITH_API_KEY\" not in os.environ:\n",
-        "    os.environ[\"LANGSMITH_API_KEY\"] = getpass.getpass(\n",
-        "        prompt=\"Enter your LangSmith API key (optional): \"\n",
-        "    )\n",
-        "if \"LANGSMITH_PROJECT\" not in os.environ:\n",
-        "    os.environ[\"LANGSMITH_PROJECT\"] = getpass.getpass(\n",
-        "        prompt='Enter your LangSmith Project Name (default = \"default\"): '\n",
-        "    )\n",
-        "    if not os.environ.get(\"LANGSMITH_PROJECT\"):\n",
-        "        os.environ[\"LANGSMITH_PROJECT\"] = \"default\""
-      ],
-      "metadata": {
-        "id": "D-a9ETxG8fmt"
-      },
-      "id": "D-a9ETxG8fmt",
-      "execution_count": 62,
-      "outputs": []
-    },
-    {
-      "cell_type": "markdown",
-      "id": "e5558ca9",
-      "metadata": {
-        "id": "e5558ca9"
-      },
-      "source": [
-        "## Using Language Models\n",
-        "\n",
-        "First up, let's learn how to use a language model by itself. LangChain supports many different language models that you can use interchangeably. For details on getting started with a specific model, refer to [supported integrations](/docs/integrations/chat/).\n",
-        "\n",
-        "<!-- HIDE_IN_NB>\n",
-        "import ChatModelTabs from \"@theme/ChatModelTabs\";\n",
-        "\n",
-        "<ChatModelTabs overrideParams={{openai: {model: \"gpt-4o-mini\"}}} />\n",
-        "HIDE_IN_NB -->"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": 63,
-      "id": "e4b41234",
-      "metadata": {
-        "id": "e4b41234"
+        "id": "hjXiSAbAH1kQ"
       },
       "outputs": [],
       "source": [
-        "\n",
-        "\n",
         "# | output: false\n",
         "# | echo: false\n",
         "\n",
@@ -280,322 +278,996 @@
     },
     {
       "cell_type": "markdown",
-      "id": "ca5642ff",
       "metadata": {
-        "id": "ca5642ff"
+        "id": "l23OSfo8H1kR"
       },
       "source": [
-        "Let's first use the model directly. [ChatModels](/docs/concepts/chat_models) are instances of LangChain [Runnables](/docs/concepts/runnables/), which means they expose a standard interface for interacting with them. To simply call the model, we can pass in a list of [messages](/docs/concepts/messages/) to the `.invoke` method."
+        "Let's first use the model directly. `ChatModel`s are instances of LangChain \"Runnables\", which means they expose a standard interface for interacting with them. To just simply call the model, we can pass in a list of messages to the `.invoke` method."
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 64,
-      "id": "1b2481f0",
+      "execution_count": 9,
       "metadata": {
         "colab": {
           "base_uri": "https://localhost:8080/"
         },
-        "id": "1b2481f0",
-        "outputId": "2588c9db-b491-4781-960f-d84994e69527"
+        "id": "cB80g-WhH1kS",
+        "outputId": "3e717da8-58ec-4aa4-d147-d16c4292dd24"
       },
       "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stderr",
-          "text": [
-            "WARNING:langsmith.client:Failed to send compressed multipart ingest: langsmith.utils.LangSmithError: Failed to POST https://api.smith.langchain.com/runs/multipart in LangSmith API. HTTPError('403 Client Error: Forbidden for url: https://api.smith.langchain.com/runs/multipart', '{\"error\":\"Forbidden\"}\\n')\n"
-          ]
-        },
         {
           "output_type": "execute_result",
           "data": {
             "text/plain": [
-              "AIMessage(content='Ciao!', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 3, 'prompt_tokens': 20, 'total_tokens': 23, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_34a54ae93c', 'id': 'chatcmpl-BmfacTzbi0VavQ8YZuHt15mJXPJo1', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='run--6118a13e-5f9b-4fc0-a9d6-a6dd5d9263bc-0', usage_metadata={'input_tokens': 20, 'output_tokens': 3, 'total_tokens': 23, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})"
+              "AIMessage(content='Hi Bob! How can I assist you today?', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 10, 'prompt_tokens': 11, 'total_tokens': 21, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_34a54ae93c', 'id': 'chatcmpl-Bmg2RH57a61koepBOcIK05DNVKgJa', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='run--97f28688-9247-418d-ad12-c6544716c2e9-0', usage_metadata={'input_tokens': 11, 'output_tokens': 10, 'total_tokens': 21, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})"
             ]
           },
           "metadata": {},
-          "execution_count": 64
+          "execution_count": 9
         }
       ],
       "source": [
-        "from langchain_core.messages import HumanMessage, SystemMessage\n",
+        "from langchain_core.messages import HumanMessage\n",
         "\n",
-        "messages = [\n",
-        "    SystemMessage(\"Translate the following from English into Italian\"),\n",
-        "    HumanMessage(\"Hello!\"),\n",
-        "]\n",
-        "\n",
-        "model.invoke(messages)"
+        "model.invoke([HumanMessage(content=\"Hi! I'm Bob\")])"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "f83373db",
       "metadata": {
-        "id": "f83373db"
+        "id": "meSDp2BQH1kT"
       },
       "source": [
-        ":::tip\n",
-        "\n",
-        "If we've enabled LangSmith, we can see that this run is logged to LangSmith, and can see the [LangSmith trace](https://smith.langchain.com/public/88baa0b2-7c1a-4d09-ba30-a47985dde2ea/r). The LangSmith trace reports [token](/docs/concepts/tokens/) usage information, latency, [standard model parameters](/docs/concepts/chat_models/#standard-parameters) (such as temperature), and other information.\n",
-        "\n",
-        ":::\n",
-        "\n",
-        "Note that ChatModels receive [message](/docs/concepts/messages/) objects as input and generate message objects as output. In addition to text content, message objects convey conversational [roles](/docs/concepts/messages/#role) and hold important data, such as [tool calls](/docs/concepts/tool_calling/) and token usage counts.\n",
-        "\n",
-        "LangChain also supports chat model inputs via strings or [OpenAI format](/docs/concepts/messages/#openai-format). The following are equivalent:\n",
-        "\n",
-        "```python\n",
-        "model.invoke(\"Hello\")\n",
-        "\n",
-        "model.invoke([{\"role\": \"user\", \"content\": \"Hello\"}])\n",
-        "\n",
-        "model.invoke([HumanMessage(\"Hello\")])\n",
-        "```\n",
-        "\n",
-        "### Streaming\n",
-        "\n",
-        "Because chat models are [Runnables](/docs/concepts/runnables/), they expose a standard interface that includes async and streaming modes of invocation. This allows us to stream individual tokens from a chat model:"
+        "The model on its own does not have any concept of state. For example, if you ask a followup question:"
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 52,
-      "id": "0abb0863-bee7-448d-b013-79d8db01e330",
+      "execution_count": 10,
       "metadata": {
         "colab": {
           "base_uri": "https://localhost:8080/"
         },
-        "id": "0abb0863-bee7-448d-b013-79d8db01e330",
-        "outputId": "5db80d7d-decd-4a44-ba82-e369bdfa43d3"
+        "id": "cJYLy6kXH1kT",
+        "outputId": "99c25bc7-8ba9-4be7-a944-1b91c8eb8990"
       },
       "outputs": [
         {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Ciao!"
-          ]
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "AIMessage(content=\"I'm sorry, but I don't know your name. I don’t have access to personal data unless you share it with me. How can I assist you today?\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 32, 'prompt_tokens': 11, 'total_tokens': 43, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_34a54ae93c', 'id': 'chatcmpl-Bmg2U9dLwkUpn6cTF4ouRBtnkPBm4', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='run--b4544df4-e4b7-480d-a5ce-c3faad018d3e-0', usage_metadata={'input_tokens': 11, 'output_tokens': 32, 'total_tokens': 43, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 10
         }
       ],
       "source": [
-        "for token in model.stream(messages):\n",
-        "    print(token.content, end=\"\")"
+        "model.invoke([HumanMessage(content=\"What's my name?\")])"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "a5963141-468c-4570-8f2e-5f7cfb6eb3db",
       "metadata": {
-        "id": "a5963141-468c-4570-8f2e-5f7cfb6eb3db"
+        "id": "EFs_HoL2H1kU"
       },
       "source": [
-        "You can find more details on streaming chat model outputs in [this guide](/docs/how_to/chat_streaming/)."
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "id": "1ab8da31",
-      "metadata": {
-        "id": "1ab8da31"
-      },
-      "source": [
-        "## Prompt Templates\n",
+        "Let's take a look at the example [LangSmith trace](https://smith.langchain.com/public/5c21cb92-2814-4119-bae9-d02b8db577ac/r)\n",
         "\n",
-        "Right now we are passing a list of messages directly into the language model. Where does this list of messages come from? Usually, it is constructed from a combination of user input and application logic. This application logic usually takes the raw user input and transforms it into a list of messages ready to pass to the language model. Common transformations include adding a system message or formatting a template with the user input.\n",
+        "We can see that it doesn't take the previous conversation turn into context, and cannot answer the question.\n",
+        "This makes for a terrible chatbot experience!\n",
         "\n",
-        "[Prompt templates](/docs/concepts/prompt_templates/) are a concept in LangChain designed to assist with this transformation. They take in raw user input and return data (a prompt) that is ready to pass into a language model.\n",
-        "\n",
-        "Let's create a prompt template here. It will take in two user variables:\n",
-        "\n",
-        "- `language`: The language to translate text into\n",
-        "- `text`: The text to translate"
+        "To get around this, we need to pass the entire [conversation history](/docs/concepts/chat_history) into the model. Let's see what happens when we do that:"
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 54,
-      "id": "3e73cc20",
+      "execution_count": 11,
       "metadata": {
-        "id": "3e73cc20"
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "A1hUJ-clH1kV",
+        "outputId": "17e2a3cd-acfd-4c6e-ea17-08a30eb1efc8"
       },
-      "outputs": [],
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "AIMessage(content='Your name is Bob! How can I help you today?', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 12, 'prompt_tokens': 33, 'total_tokens': 45, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_34a54ae93c', 'id': 'chatcmpl-Bmg2cWmzrVXgjMhcBcxassG5Qecwj', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='run--664aa1ce-fc6a-4fe6-ba7a-089e66ec5d4b-0', usage_metadata={'input_tokens': 33, 'output_tokens': 12, 'total_tokens': 45, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 11
+        }
+      ],
       "source": [
-        "from langchain_core.prompts import ChatPromptTemplate\n",
+        "from langchain_core.messages import AIMessage\n",
         "\n",
-        "system_template = \"Translate the following from English into {language}\"\n",
-        "\n",
-        "prompt_template = ChatPromptTemplate.from_messages(\n",
-        "    [(\"system\", system_template), (\"user\", \"{text}\")]\n",
+        "model.invoke(\n",
+        "    [\n",
+        "        HumanMessage(content=\"Hi! I'm Bob\"),\n",
+        "        AIMessage(content=\"Hello Bob! How can I assist you today?\"),\n",
+        "        HumanMessage(content=\"What's my name?\"),\n",
+        "    ]\n",
         ")"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "7e876c2a",
       "metadata": {
-        "id": "7e876c2a"
+        "id": "gaE4I8tfH1kW"
       },
       "source": [
-        "Note that `ChatPromptTemplate` supports multiple [message roles](/docs/concepts/messages/#role) in a single template. We format the `language` parameter into the system message, and the user `text` into a user message."
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "id": "d9711ba6",
-      "metadata": {
-        "id": "d9711ba6"
-      },
-      "source": [
-        "The input to this prompt template is a dictionary. We can play around with this prompt template by itself to see what it does by itself"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": 58,
-      "id": "f781b3cb",
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/"
-        },
-        "id": "f781b3cb",
-        "outputId": "4193d2ee-3126-4a20-eec3-fe83763297d3"
-      },
-      "outputs": [
-        {
-          "output_type": "execute_result",
-          "data": {
-            "text/plain": [
-              "ChatPromptValue(messages=[SystemMessage(content='Translate the following from English into Italian', additional_kwargs={}, response_metadata={}), HumanMessage(content='Women!', additional_kwargs={}, response_metadata={})])"
-            ]
-          },
-          "metadata": {},
-          "execution_count": 58
-        }
-      ],
-      "source": [
-        "prompt = prompt_template.invoke({\"language\": \"Italian\", \"text\": \"Women!\"})\n",
+        "And now we can see that we get a good response!\n",
         "\n",
-        "prompt"
+        "This is the basic idea underpinning a chatbot's ability to interact conversationally.\n",
+        "So how do we best implement this?"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "1a49ba9e",
       "metadata": {
-        "id": "1a49ba9e"
+        "id": "Sqw61m4JH1ka"
       },
       "source": [
-        "We can see that it returns a `ChatPromptValue` that consists of two messages. If we want to access the messages directly we do:"
+        "## Message persistence\n",
+        "\n",
+        "[LangGraph](https://langchain-ai.github.io/langgraph/) implements a built-in persistence layer, making it ideal for chat applications that support multiple conversational turns.\n",
+        "\n",
+        "Wrapping our chat model in a minimal LangGraph application allows us to automatically persist the message history, simplifying the development of multi-turn applications.\n",
+        "\n",
+        "LangGraph comes with a simple in-memory checkpointer, which we use below. See its [documentation](https://langchain-ai.github.io/langgraph/concepts/persistence/) for more detail, including how to use different persistence backends (e.g., SQLite or Postgres)."
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 59,
-      "id": "2159b619",
+      "source": [
+        "%pip install langgraph\n"
+      ],
       "metadata": {
         "colab": {
           "base_uri": "https://localhost:8080/"
         },
-        "id": "2159b619",
-        "outputId": "b7be1878-3138-4375-cd64-212955f5a05f"
+        "id": "HKWLQNE6QPEM",
+        "outputId": "03d93934-0733-4bad-cf15-72cda2c83eab"
       },
+      "execution_count": 18,
       "outputs": [
         {
-          "output_type": "execute_result",
-          "data": {
-            "text/plain": [
-              "[SystemMessage(content='Translate the following from English into Italian', additional_kwargs={}, response_metadata={}),\n",
-              " HumanMessage(content='Women!', additional_kwargs={}, response_metadata={})]"
-            ]
-          },
-          "metadata": {},
-          "execution_count": 59
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: langgraph in /usr/local/lib/python3.11/dist-packages (0.4.10)\n",
+            "Requirement already satisfied: langchain-core>=0.1 in /usr/local/lib/python3.11/dist-packages (from langgraph) (0.3.66)\n",
+            "Requirement already satisfied: langgraph-checkpoint>=2.0.26 in /usr/local/lib/python3.11/dist-packages (from langgraph) (2.1.0)\n",
+            "Requirement already satisfied: langgraph-prebuilt>=0.2.0 in /usr/local/lib/python3.11/dist-packages (from langgraph) (0.2.3)\n",
+            "Requirement already satisfied: langgraph-sdk>=0.1.42 in /usr/local/lib/python3.11/dist-packages (from langgraph) (0.1.70)\n",
+            "Requirement already satisfied: pydantic>=2.7.4 in /usr/local/lib/python3.11/dist-packages (from langgraph) (2.11.7)\n",
+            "Requirement already satisfied: xxhash>=3.5.0 in /usr/local/lib/python3.11/dist-packages (from langgraph) (3.5.0)\n",
+            "Requirement already satisfied: langsmith>=0.3.45 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (0.4.2)\n",
+            "Requirement already satisfied: tenacity!=8.4.0,<10.0.0,>=8.1.0 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (8.5.0)\n",
+            "Requirement already satisfied: jsonpatch<2.0,>=1.33 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (1.33)\n",
+            "Requirement already satisfied: PyYAML>=5.3 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (6.0.2)\n",
+            "Requirement already satisfied: packaging<25,>=23.2 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (24.2)\n",
+            "Requirement already satisfied: typing-extensions>=4.7 in /usr/local/lib/python3.11/dist-packages (from langchain-core>=0.1->langgraph) (4.14.0)\n",
+            "Requirement already satisfied: ormsgpack>=1.10.0 in /usr/local/lib/python3.11/dist-packages (from langgraph-checkpoint>=2.0.26->langgraph) (1.10.0)\n",
+            "Requirement already satisfied: httpx>=0.25.2 in /usr/local/lib/python3.11/dist-packages (from langgraph-sdk>=0.1.42->langgraph) (0.28.1)\n",
+            "Requirement already satisfied: orjson>=3.10.1 in /usr/local/lib/python3.11/dist-packages (from langgraph-sdk>=0.1.42->langgraph) (3.10.18)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.2 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (2.33.2)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic>=2.7.4->langgraph) (0.4.1)\n",
+            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (4.9.0)\n",
+            "Requirement already satisfied: certifi in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (2025.6.15)\n",
+            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (1.0.9)\n",
+            "Requirement already satisfied: idna in /usr/local/lib/python3.11/dist-packages (from httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (3.10)\n",
+            "Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (0.16.0)\n",
+            "Requirement already satisfied: jsonpointer>=1.9 in /usr/local/lib/python3.11/dist-packages (from jsonpatch<2.0,>=1.33->langchain-core>=0.1->langgraph) (3.0.0)\n",
+            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (2.32.3)\n",
+            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (1.0.0)\n",
+            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith>=0.3.45->langchain-core>=0.1->langgraph) (0.23.0)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith>=0.3.45->langchain-core>=0.1->langgraph) (3.4.2)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langsmith>=0.3.45->langchain-core>=0.1->langgraph) (2.4.0)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx>=0.25.2->langgraph-sdk>=0.1.42->langgraph) (1.3.1)\n"
+          ]
         }
-      ],
-      "source": [
-        "prompt.to_messages()"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "id": "47e70ee6-f0e0-4ae0-a290-002799ebf828",
-      "metadata": {
-        "id": "47e70ee6-f0e0-4ae0-a290-002799ebf828"
-      },
-      "source": [
-        "Finally, we can invoke the chat model on the formatted prompt:"
       ]
     },
     {
       "cell_type": "code",
-      "execution_count": 61,
-      "id": "3a509d8c-e122-4641-b9ee-91bc23aa155a",
+      "execution_count": 12,
+      "metadata": {
+        "id": "N30gAvkaH1ka"
+      },
+      "outputs": [],
+      "source": [
+        "from langgraph.checkpoint.memory import MemorySaver\n",
+        "from langgraph.graph import START, MessagesState, StateGraph\n",
+        "\n",
+        "# Define a new graph\n",
+        "workflow = StateGraph(state_schema=MessagesState)\n",
+        "\n",
+        "\n",
+        "# Define the function that calls the model\n",
+        "def call_model(state: MessagesState):\n",
+        "    response = model.invoke(state[\"messages\"])\n",
+        "    return {\"messages\": response}\n",
+        "\n",
+        "\n",
+        "# Define the (single) node in the graph\n",
+        "workflow.add_edge(START, \"model\")\n",
+        "workflow.add_node(\"model\", call_model)\n",
+        "\n",
+        "# Add memory\n",
+        "memory = MemorySaver()\n",
+        "app = workflow.compile(checkpointer=memory)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "RTLSu5iDH1ka"
+      },
+      "source": [
+        "We now need to create a `config` that we pass into the runnable every time. This config contains information that is not part of the input directly, but is still useful. In this case, we want to include a `thread_id`. This should look like:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 13,
+      "metadata": {
+        "id": "VOvjq-q5H1kb"
+      },
+      "outputs": [],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc123\"}}"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "9CtMyhSNH1kb"
+      },
+      "source": [
+        "This enables us to support multiple conversation threads with a single application, a common requirement when your application has multiple users.\n",
+        "\n",
+        "We can then invoke the application:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 14,
       "metadata": {
         "colab": {
           "base_uri": "https://localhost:8080/"
         },
-        "id": "3a509d8c-e122-4641-b9ee-91bc23aa155a",
-        "outputId": "08de5729-2f29-4969-c992-7463aa64c477"
+        "id": "wZOmc1tTH1kb",
+        "outputId": "b5033751-2e41-41ad-faa9-6894206eaa39"
       },
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
           "text": [
-            "Donne!\n"
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Hi Bob! How can I assist you today?\n"
           ]
         }
       ],
       "source": [
-        "response = model.invoke(prompt)\n",
-        "print(response.content)"
+        "query = \"Hi! I'm Bob.\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()  # output contains all messages in state"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 15,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "cGZKKSxhH1kc",
+        "outputId": "bb891548-cd59-4356-e511-1f8054fde57c"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Your name is Bob. How can I help you today, Bob?\n"
+          ]
+        }
+      ],
+      "source": [
+        "query = \"What's my name?\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "d7f0bf25-6efb-4853-9a8f-242f2855c84a",
       "metadata": {
-        "id": "d7f0bf25-6efb-4853-9a8f-242f2855c84a"
+        "id": "WXzjpOvzH1kd"
       },
       "source": [
+        "Great! Our chatbot now remembers things about us. If we change the config to reference a different `thread_id`, we can see that it starts the conversation fresh."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 16,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "fkiOCLqeH1kd",
+        "outputId": "d7bf70ab-cde1-4847-d2dd-d309e06ad22b"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "I'm sorry, but I don't have access to personal data about individuals unless it has been shared with me in the course of our conversation. Therefore, I don't know your name. If you'd like, you can tell me your name!\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc234\"}}\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "66L2kHq5H1kd"
+      },
+      "source": [
+        "However, we can always go back to the original conversation (since we are persisting it in a database)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 17,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "pL1gCa8ZH1kd",
+        "outputId": "9785a7d4-1621-4362-8f50-bf1a72e9a129"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Your name is Bob. If there's anything else you need, feel free to ask!\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc123\"}}\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "yB9OpAweH1ke"
+      },
+      "source": [
+        "This is how we can support a chatbot having conversations with many users!\n",
+        "\n",
         ":::tip\n",
-        "Message `content` can contain both text and [content blocks](/docs/concepts/messages/#aimessage) with additional structure. See [this guide](/docs/how_to/output_parser_string/) for more information.\n",
-        ":::\n",
         "\n",
-        "If we take a look at the [LangSmith trace](https://smith.langchain.com/public/3ccc2d5e-2869-467b-95d6-33a577df99a2/r), we can see exactly what prompt the chat model receives, along with [token](/docs/concepts/tokens/) usage information, latency, [standard model parameters](/docs/concepts/chat_models/#standard-parameters) (such as temperature), and other information."
+        "For async support, update the `call_model` node to be an async function and use `.ainvoke` when invoking the application:\n",
+        "\n",
+        "```python\n",
+        "# Async function for node:\n",
+        "async def call_model(state: MessagesState):\n",
+        "    response = await model.ainvoke(state[\"messages\"])\n",
+        "    return {\"messages\": response}\n",
+        "\n",
+        "\n",
+        "# Define graph as before:\n",
+        "workflow = StateGraph(state_schema=MessagesState)\n",
+        "workflow.add_edge(START, \"model\")\n",
+        "workflow.add_node(\"model\", call_model)\n",
+        "app = workflow.compile(checkpointer=MemorySaver())\n",
+        "\n",
+        "# Async invocation:\n",
+        "output = await app.ainvoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()\n",
+        "```\n",
+        "\n",
+        ":::"
       ]
     },
     {
       "cell_type": "markdown",
-      "id": "befdb168",
       "metadata": {
-        "id": "befdb168"
+        "id": "kv_uOmNhH1ke"
       },
       "source": [
-        "## Conclusion\n",
+        "Right now, all we've done is add a simple persistence layer around the model. We can start to make the chatbot more complicated and personalized by adding in a prompt template.\n",
         "\n",
-        "That's it! In this tutorial you've learned how to create your first simple LLM application. You've learned how to work with language models, how to create a prompt template, and how to get great observability into applications you create with LangSmith.\n",
+        "## Prompt templates\n",
         "\n",
-        "This just scratches the surface of what you will want to learn to become a proficient AI Engineer. Luckily - we've got a lot of other resources!\n",
+        "[Prompt Templates](/docs/concepts/prompt_templates) help to turn raw user information into a format that the LLM can work with. In this case, the raw user input is just a message, which we are passing to the LLM. Let's now make that a bit more complicated. First, let's add in a system message with some custom instructions (but still taking messages as input). Next, we'll add in more input besides just the messages.\n",
         "\n",
-        "For further reading on the core concepts of LangChain, we've got detailed [Conceptual Guides](/docs/concepts).\n",
+        "To add in a system message, we will create a `ChatPromptTemplate`. We will utilize `MessagesPlaceholder` to pass all the messages in."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "6Bh6Yq9RH1ke"
+      },
+      "outputs": [],
+      "source": [
+        "from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder\n",
         "\n",
-        "If you have more specific questions on these concepts, check out the following sections of the how-to guides:\n",
+        "prompt_template = ChatPromptTemplate.from_messages(\n",
+        "    [\n",
+        "        (\n",
+        "            \"system\",\n",
+        "            \"You talk like a pirate. Answer all questions to the best of your ability.\",\n",
+        "        ),\n",
+        "        MessagesPlaceholder(variable_name=\"messages\"),\n",
+        "    ]\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "5Yv8oK1HH1kf"
+      },
+      "source": [
+        "We can now update our application to incorporate this template:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "yhbnZrsuH1kf"
+      },
+      "outputs": [],
+      "source": [
+        "workflow = StateGraph(state_schema=MessagesState)\n",
         "\n",
-        "- [Chat models](/docs/how_to/#chat-models)\n",
-        "- [Prompt templates](/docs/how_to/#prompt-templates)\n",
         "\n",
-        "And the LangSmith docs:\n",
+        "def call_model(state: MessagesState):\n",
+        "    # highlight-start\n",
+        "    prompt = prompt_template.invoke(state)\n",
+        "    response = model.invoke(prompt)\n",
+        "    # highlight-end\n",
+        "    return {\"messages\": response}\n",
         "\n",
-        "- [LangSmith](https://docs.smith.langchain.com)"
+        "\n",
+        "workflow.add_edge(START, \"model\")\n",
+        "workflow.add_node(\"model\", call_model)\n",
+        "\n",
+        "memory = MemorySaver()\n",
+        "app = workflow.compile(checkpointer=memory)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "DcIRwSz6H1kf"
+      },
+      "source": [
+        "We invoke the application in the same way:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "dSc1Dn1GH1kf",
+        "outputId": "77ff1367-680f-42bc-e5e0-6340831c0cc9"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Ahoy there, Jim! What brings ye to these waters today? Be ye seekin' treasure, knowledge, or perhaps a good tale from the high seas? Arrr!\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc345\"}}\n",
+        "query = \"Hi! I'm Jim.\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "h8HwVVUiH1kg",
+        "outputId": "bdd86bfa-3deb-4eb2-e707-2292561912eb"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Ye be called Jim, matey! A fine name fer a swashbuckler such as yerself! What else can I do fer ye? Arrr!\n"
+          ]
+        }
+      ],
+      "source": [
+        "query = \"What is my name?\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke({\"messages\": input_messages}, config)\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gyjydGmZH1kg"
+      },
+      "source": [
+        "Awesome! Let's now make our prompt a little bit more complicated. Let's assume that the prompt template now looks something like this:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "IE5E_c9oH1kg"
+      },
+      "outputs": [],
+      "source": [
+        "prompt_template = ChatPromptTemplate.from_messages(\n",
+        "    [\n",
+        "        (\n",
+        "            \"system\",\n",
+        "            \"You are a helpful assistant. Answer all questions to the best of your ability in {language}.\",\n",
+        "        ),\n",
+        "        MessagesPlaceholder(variable_name=\"messages\"),\n",
+        "    ]\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "g2Qr_zqmH1kg"
+      },
+      "source": [
+        "Note that we have added a new `language` input to the prompt. Our application now has two parameters-- the input `messages` and `language`. We should update our application's state to reflect this:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "AynHWGazH1kh"
+      },
+      "outputs": [],
+      "source": [
+        "from typing import Sequence\n",
+        "\n",
+        "from langchain_core.messages import BaseMessage\n",
+        "from langgraph.graph.message import add_messages\n",
+        "from typing_extensions import Annotated, TypedDict\n",
+        "\n",
+        "\n",
+        "# highlight-next-line\n",
+        "class State(TypedDict):\n",
+        "    # highlight-next-line\n",
+        "    messages: Annotated[Sequence[BaseMessage], add_messages]\n",
+        "    # highlight-next-line\n",
+        "    language: str\n",
+        "\n",
+        "\n",
+        "workflow = StateGraph(state_schema=State)\n",
+        "\n",
+        "\n",
+        "def call_model(state: State):\n",
+        "    prompt = prompt_template.invoke(state)\n",
+        "    response = model.invoke(prompt)\n",
+        "    return {\"messages\": [response]}\n",
+        "\n",
+        "\n",
+        "workflow.add_edge(START, \"model\")\n",
+        "workflow.add_node(\"model\", call_model)\n",
+        "\n",
+        "memory = MemorySaver()\n",
+        "app = workflow.compile(checkpointer=memory)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "tE4KfzylH1kh",
+        "outputId": "b1f6c34b-3112-42c4-aed1-eef5bb30509b"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "¡Hola, Bob! ¿Cómo puedo ayudarte hoy?\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc456\"}}\n",
+        "query = \"Hi! I'm Bob.\"\n",
+        "language = \"Spanish\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke(\n",
+        "    # highlight-next-line\n",
+        "    {\"messages\": input_messages, \"language\": language},\n",
+        "    config,\n",
+        ")\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "wX8db3SfH1kh"
+      },
+      "source": [
+        "Note that the entire state is persisted, so we can omit parameters like `language` if no changes are desired:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "wsLAhsKNH1kh",
+        "outputId": "45041cd8-1fd6-4bb9-9912-83b158a242fc"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "Tu nombre es Bob. ¿Hay algo más en lo que pueda ayudarte?\n"
+          ]
+        }
+      ],
+      "source": [
+        "query = \"What is my name?\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "output = app.invoke(\n",
+        "    {\"messages\": input_messages},\n",
+        "    config,\n",
+        ")\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "jNd892MTH1kh"
+      },
+      "source": [
+        "To help you understand what's happening internally, check out [this LangSmith trace](https://smith.langchain.com/public/15bd8589-005c-4812-b9b9-23e74ba4c3c6/r)."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ngvBPatIH1kh"
+      },
+      "source": [
+        "## Managing Conversation History\n",
+        "\n",
+        "One important concept to understand when building chatbots is how to manage conversation history. If left unmanaged, the list of messages will grow unbounded and potentially overflow the context window of the LLM. Therefore, it is important to add a step that limits the size of the messages you are passing in.\n",
+        "\n",
+        "**Importantly, you will want to do this BEFORE the prompt template but AFTER you load previous messages from Message History.**\n",
+        "\n",
+        "We can do this by adding a simple step in front of the prompt that modifies the `messages` key appropriately, and then wrap that new chain in the Message History class.\n",
+        "\n",
+        "LangChain comes with a few built-in helpers for [managing a list of messages](/docs/how_to/#messages). In this case we'll use the [trim_messages](/docs/how_to/trim_messages/) helper to reduce how many messages we're sending to the model. The trimmer allows us to specify how many tokens we want to keep, along with other parameters like if we want to always keep the system message and whether to allow partial messages:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "lRXjYSuOH1ki",
+        "outputId": "311824b6-77ec-41f7-a1d6-50b8f40ee626"
+      },
+      "outputs": [
+        {
+          "data": {
+            "text/plain": [
+              "[SystemMessage(content=\"you're a good assistant\", additional_kwargs={}, response_metadata={}),\n",
+              " HumanMessage(content='whats 2 + 2', additional_kwargs={}, response_metadata={}),\n",
+              " AIMessage(content='4', additional_kwargs={}, response_metadata={}),\n",
+              " HumanMessage(content='thanks', additional_kwargs={}, response_metadata={}),\n",
+              " AIMessage(content='no problem!', additional_kwargs={}, response_metadata={}),\n",
+              " HumanMessage(content='having fun?', additional_kwargs={}, response_metadata={}),\n",
+              " AIMessage(content='yes!', additional_kwargs={}, response_metadata={})]"
+            ]
+          },
+          "execution_count": 23,
+          "metadata": {},
+          "output_type": "execute_result"
+        }
+      ],
+      "source": [
+        "from langchain_core.messages import SystemMessage, trim_messages\n",
+        "\n",
+        "trimmer = trim_messages(\n",
+        "    max_tokens=65,\n",
+        "    strategy=\"last\",\n",
+        "    token_counter=model,\n",
+        "    include_system=True,\n",
+        "    allow_partial=False,\n",
+        "    start_on=\"human\",\n",
+        ")\n",
+        "\n",
+        "messages = [\n",
+        "    SystemMessage(content=\"you're a good assistant\"),\n",
+        "    HumanMessage(content=\"hi! I'm bob\"),\n",
+        "    AIMessage(content=\"hi!\"),\n",
+        "    HumanMessage(content=\"I like vanilla ice cream\"),\n",
+        "    AIMessage(content=\"nice\"),\n",
+        "    HumanMessage(content=\"whats 2 + 2\"),\n",
+        "    AIMessage(content=\"4\"),\n",
+        "    HumanMessage(content=\"thanks\"),\n",
+        "    AIMessage(content=\"no problem!\"),\n",
+        "    HumanMessage(content=\"having fun?\"),\n",
+        "    AIMessage(content=\"yes!\"),\n",
+        "]\n",
+        "\n",
+        "trimmer.invoke(messages)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "87TdTADkH1ki"
+      },
+      "source": [
+        "To  use it in our chain, we just need to run the trimmer before we pass the `messages` input to our prompt."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "eB281pnaH1ki"
+      },
+      "outputs": [],
+      "source": [
+        "workflow = StateGraph(state_schema=State)\n",
+        "\n",
+        "\n",
+        "def call_model(state: State):\n",
+        "    # highlight-start\n",
+        "    trimmed_messages = trimmer.invoke(state[\"messages\"])\n",
+        "    prompt = prompt_template.invoke(\n",
+        "        {\"messages\": trimmed_messages, \"language\": state[\"language\"]}\n",
+        "    )\n",
+        "    response = model.invoke(prompt)\n",
+        "    # highlight-end\n",
+        "    return {\"messages\": [response]}\n",
+        "\n",
+        "\n",
+        "workflow.add_edge(START, \"model\")\n",
+        "workflow.add_node(\"model\", call_model)\n",
+        "\n",
+        "memory = MemorySaver()\n",
+        "app = workflow.compile(checkpointer=memory)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Iw3sWs2cH1kj"
+      },
+      "source": [
+        "Now if we try asking the model our name, it won't know it since we trimmed that part of the chat history:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "9fMNh2QrH1kj",
+        "outputId": "3ab87937-29e1-4213-a9c3-c723acd7d136"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "I don't know your name. You haven't told me yet!\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc567\"}}\n",
+        "query = \"What is my name?\"\n",
+        "language = \"English\"\n",
+        "\n",
+        "# highlight-next-line\n",
+        "input_messages = messages + [HumanMessage(query)]\n",
+        "output = app.invoke(\n",
+        "    {\"messages\": input_messages, \"language\": language},\n",
+        "    config,\n",
+        ")\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "2_4v92T7H1kj"
+      },
+      "source": [
+        "But if we ask about information that is within the last few messages, it remembers:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "kiQlquM0H1kk",
+        "outputId": "db9c41ec-c28b-453b-a8c1-dcdfa900a1e4"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "==================================\u001b[1m Ai Message \u001b[0m==================================\n",
+            "\n",
+            "You asked what 2 + 2 equals.\n"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc678\"}}\n",
+        "query = \"What math problem did I ask?\"\n",
+        "language = \"English\"\n",
+        "\n",
+        "input_messages = messages + [HumanMessage(query)]\n",
+        "output = app.invoke(\n",
+        "    {\"messages\": input_messages, \"language\": language},\n",
+        "    config,\n",
+        ")\n",
+        "output[\"messages\"][-1].pretty_print()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "SZupQntFH1kk"
+      },
+      "source": [
+        "If you take a look at LangSmith, you can see exactly what is happening under the hood in the [LangSmith trace](https://smith.langchain.com/public/04402eaa-29e6-4bb1-aa91-885b730b6c21/r)."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "qS4lNlYBH1kk"
+      },
+      "source": [
+        "## Streaming\n",
+        "\n",
+        "Now we've got a functioning chatbot. However, one *really* important UX consideration for chatbot applications is streaming. LLMs can sometimes take a while to respond, and so in order to improve the user experience one thing that most applications do is stream back each token as it is generated. This allows the user to see progress.\n",
+        "\n",
+        "It's actually super easy to do this!\n",
+        "\n",
+        "By default, `.stream` in our LangGraph application streams application steps-- in this case, the single step of the model response. Setting `stream_mode=\"messages\"` allows us to stream output tokens instead:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "8Pm_lWTqH1kl",
+        "outputId": "862cc726-5afc-425a-853d-b64965177f25"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "|Hi| Todd|!| Here|’s| a| joke| for| you|:\n",
+            "\n",
+            "|Why| don|’t| skeleton|s| fight| each| other|?\n",
+            "\n",
+            "|Because| they| don|’t| have| the| guts|!||"
+          ]
+        }
+      ],
+      "source": [
+        "config = {\"configurable\": {\"thread_id\": \"abc789\"}}\n",
+        "query = \"Hi I'm Todd, please tell me a joke.\"\n",
+        "language = \"English\"\n",
+        "\n",
+        "input_messages = [HumanMessage(query)]\n",
+        "# highlight-next-line\n",
+        "for chunk, metadata in app.stream(\n",
+        "    {\"messages\": input_messages, \"language\": language},\n",
+        "    config,\n",
+        "    # highlight-next-line\n",
+        "    stream_mode=\"messages\",\n",
+        "):\n",
+        "    if isinstance(chunk, AIMessage):  # Filter to just model responses\n",
+        "        print(chunk.content, end=\"|\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "hnRcOh0UH1kl"
+      },
+      "source": [
+        "## Next Steps\n",
+        "\n",
+        "Now that you understand the basics of how to create a chatbot in LangChain, some more advanced tutorials you may be interested in are:\n",
+        "\n",
+        "- [Conversational RAG](/docs/tutorials/qa_chat_history): Enable a chatbot experience over an external source of data\n",
+        "- [Agents](/docs/tutorials/agents): Build a chatbot that can take actions\n",
+        "\n",
+        "If you want to dive deeper on specifics, some things worth checking out are:\n",
+        "\n",
+        "- [Streaming](/docs/how_to/streaming): streaming is *crucial* for chat applications\n",
+        "- [How to add message history](/docs/how_to/message_history): for a deeper dive into all things related to message history\n",
+        "- [How to manage large message history](/docs/how_to/trim_messages/): more techniques for managing a large chat history\n",
+        "- [LangGraph main docs](https://langchain-ai.github.io/langgraph/): for more detail on building with LangGraph"
       ]
     }
   ],
   "metadata": {
     "kernelspec": {
-      "display_name": "Python 3 (ipykernel)",
+      "display_name": ".venv",
       "language": "python",
       "name": "python3"
     },
@@ -609,12 +1281,12 @@
       "name": "python",
       "nbconvert_exporter": "python",
       "pygments_lexer": "ipython3",
-      "version": "3.10.4"
+      "version": "3.11.4"
     },
     "colab": {
       "provenance": []
     }
   },
   "nbformat": 4,
-  "nbformat_minor": 5
+  "nbformat_minor": 0
 }
